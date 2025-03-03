@@ -55,7 +55,6 @@ function getJSON(currentLocation) {
                     return;
                 }
 
-                console.log('DD:', obj.distance);
                 itemList.unshift({
                     'backgroundColor': 'black',
                     'title': obj.stationName,
@@ -70,6 +69,7 @@ function getJSON(currentLocation) {
                 highlightBackgroundColor: 'red',
                 highlightTextColor: 'white'
             });
+
 
             mainscreen.sections([{
                 backgroundColor: 'cyan',
@@ -124,7 +124,6 @@ function getJSON(currentLocation) {
                 card.add(subtitle);
                 card.add(bikes);
                 card.add(docks);
-
                 card.show();
             });
 
