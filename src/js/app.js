@@ -1,88 +1,134 @@
-/**
- * Welcome to Pebble.js!
- *
- * This is where you write your app.
- */
+var UI          = require('ui'),
+    ajax        = require('ajax'),
+    menu        = [],
+    loader      = new UI.Window({}),
+    loadingText = new UI.Text({text: 'loading'}),
+    Vector2     = require('vector2'),
+    distance    = require('./distance');
 
-var UI = require('ui');
-var Vector2 = require('vector2');
+var itemList = [],
+    itemIndex = 0;
 
-var main = new UI.Card({
-  title: 'Pebble.js',
-  icon: 'images/menu_icon.png',
-  subtitle: 'Hello World!',
-  body: 'Press any button.',
-  subtitleColor: 'indigo', // Named colors
-  bodyColor: '#9a0036' // Hex colors
+var locationOptions = {
+    enableHighAccuracy: true,
+    maximumAge: 10000,
+    timeout: 10000
+};
+
+loader.add(loadingText);
+loader.show();
+
+
+navigator.geolocation.getCurrentPosition(function (pos) {
+    getJSON(pos);
+}, function (err) {
+    console.log(err, ' =/');
+}, locationOptions);
+
+navigator.geolocation.watchPosition(function (pos) {
+    if (itemList[itemIndex] === undefined) {
+        return;
+    }
+
+    itemList[itemIndex].distance = distance(pos.coords.latitude, pos.coords.longitude, itemList[itemIndex].obj.latitude, itemList[itemIndex].obj.longitude);
 });
 
-main.show();
 
-main.on('click', 'up', function(e) {
-  var menu = new UI.Menu({
-    sections: [{
-      items: [{
-        title: 'Pebble.js',
-        icon: 'images/menu_icon.png',
-        subtitle: 'Can do Menus'
-      }, {
-        title: 'Second Item',
-        subtitle: 'Subtitle Text'
-      }, {
-        title: 'Third Item',
-      }, {
-        title: 'Fourth Item',
-      }]
-    }]
-  });
-  menu.on('select', function(e) {
-    console.log('Selected item #' + e.itemIndex + ' of section #' + e.sectionIndex);
-    console.log('The item is titled "' + e.item.title + '"');
-  });
-  menu.show();
-});
+function getJSON(currentLocation) {
+    ajax(
+        {
+            url: 'https://tor.publicbikesystem.net/ube/stations',
+            type: 'json'
+        },
+        function (data) {
 
-main.on('click', 'select', function(e) {
-  var wind = new UI.Window({
-    backgroundColor: 'black'
-  });
-  var radial = new UI.Radial({
-    size: new Vector2(140, 140),
-    angle: 0,
-    angle2: 300,
-    radius: 20,
-    backgroundColor: 'cyan',
-    borderColor: 'celeste',
-    borderWidth: 1,
-  });
-  var textfield = new UI.Text({
-    size: new Vector2(140, 60),
-    font: 'gothic-24-bold',
-    text: 'Dynamic\nWindow',
-    textAlign: 'center'
-  });
-  var windSize = wind.size();
-  // Center the radial in the window
-  var radialPos = radial.position()
-      .addSelf(windSize)
-      .subSelf(radial.size())
-      .multiplyScalar(0.5);
-  radial.position(radialPos);
-  // Center the textfield in the window
-  var textfieldPos = textfield.position()
-      .addSelf(windSize)
-      .subSelf(textfield.size())
-      .multiplyScalar(0.5);
-  textfield.position(textfieldPos);
-  wind.add(radial);
-  wind.add(textfield);
-  wind.show();
-});
+            data.stationBeanList.forEach(function (obj) {
+                obj.distance = distance(currentLocation.coords.latitude, currentLocation.coords.longitude, obj.latitude, obj.longitude);
+            });
 
-main.on('click', 'down', function(e) {
-  var card = new UI.Card();
-  card.title('A Card');
-  card.subtitle('Is a Window');
-  card.body('The simplest window type in Pebble.js.');
-  card.show();
-});
+            data.stationBeanList.sort(function (first, second) {
+                return second.distance - first.distance;
+            });
+
+            data.stationBeanList.forEach(function (obj, index) {
+                if (index > 6) {
+                    return;
+                }
+
+                console.log('DD:', obj.distance);
+                itemList.unshift({
+                    'backgroundColor': 'black',
+                    'title': obj.stationName,
+                    'subtitle': " " + obj.distance.toPrecision(2) + " km",
+                    'data': obj
+                })
+            });
+
+            mainscreen = new UI.Menu({
+                backgroundColor: 'cyan',
+                textColor: 'black',
+                highlightBackgroundColor: 'red',
+                highlightTextColor: 'white'
+            });
+
+            mainscreen.sections([{
+                backgroundColor: 'cyan',
+                title: 'BikeShare',
+                items: itemList
+            }]);
+
+            mainscreen.on('hide', function () {
+                isInDetails = false;
+            });
+
+            mainscreen.on('select', function (event) {
+                var bikeStop = event.item;
+                var card = new UI.Window({
+                    title: bikeStop.title,
+                    backgroundColor: 'cyan',
+                    fullscreen: true
+                });
+
+                itemIndex = event.itemIndex;
+
+                var windowSize = new Vector2(144, 168);
+
+                var paddingX = windowSize.x - 12;
+
+                var docks = new UI.Text({
+                    text: 'Docks: ' + bikeStop.data.availableDocks, position: new Vector2(6, 140),
+                    size: new Vector2(paddingX, 20),
+                    font: 'gothic-18-bold',
+                    color: 'black'
+                });
+                var bikes = new UI.Text({
+                    text: 'Bikes: ' + bikeStop.data.availableBikes, position: new Vector2(6, 120),
+                    size: new Vector2(paddingX, 20),
+                    font: 'gothic-18-bold',
+                    color: 'black'
+                });
+                var subtitle = new UI.Text({
+                    text: 'Distance: ' + bikeStop.subtitle, position: new Vector2(6, 100),
+                    size: new Vector2(paddingX, 20),
+                    font: 'gothic-18-bold',
+                    color: 'black'
+                });
+                var title = new UI.Text({
+                    text: bikeStop.title, position: new Vector2(6, 5),
+                    size: new Vector2(paddingX, 30),
+                    font: 'gothic-24-bold',
+                    color: 'black'
+                });
+
+                card.add(title);
+                card.add(subtitle);
+                card.add(bikes);
+                card.add(docks);
+
+                card.show();
+            });
+
+            mainscreen.show();
+        }
+    );
+}
